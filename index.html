@@ -677,7 +677,6 @@ function onSuccess(r) {
   $('finPages').textContent = r.pages + ' หน้า';
   const bx = $('finBtns'); bx.innerHTML = '';
   const a = document.createElement('a'); a.className = 'btn'; a.href = r.url; a.target = '_blank'; a.textContent = 'เปิดไฟล์ PDF ใน Google Drive'; bx.appendChild(a);
-  const n = document.createElement('button'); n.className = 'primary'; n.style.cssText = 'width:100%;margin-bottom:8px'; n.textContent = 'สแกนชุดใหม่'; n.onclick = newBatch; bx.appendChild(n);
   if (BOOT.returnUrl) {
     const r2 = document.createElement('button'); r2.className = 'ok'; r2.style.cssText = 'width:100%;margin-bottom:8px;padding:14px';
     let left = 4; const go = () => { location.href = BOOT.returnUrl; };
