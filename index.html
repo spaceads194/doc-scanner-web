@@ -70,11 +70,12 @@
   .row { display:flex; gap:8px; } .row > * { flex:1; }
 
   /* ปรับมุม */
-  #corner { position:fixed; inset:0; background:#000; z-index:20; display:flex; flex-direction:column; gap:10px; padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
+  #corner { position:fixed; inset:0; height:100vh; height:100dvh; background:#000; z-index:20; display:flex; flex-direction:column; gap:10px; padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
   #cnTitle { text-align:center; font-size:14px; color:var(--mute); }
   #cnBox { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
   #cnWrap { position:relative; display:inline-block; line-height:0; touch-action:none; }
-  #cnImg { display:block; max-width:calc(100vw - 24px); max-height:calc(100vh - 200px); }
+  #cnImg { display:block; max-width:calc(100vw - 24px); max-height:calc(100vh - 250px); max-height:calc(100dvh - 250px); }
+  #corner .row { flex-shrink:0; }
   #cnSvg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   #cnPoly { fill:rgba(245,158,11,.15); stroke:#f59e0b; stroke-width:3; vector-effect:non-scaling-stroke; }
   .hd { position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%; border:3px solid #f59e0b; background:rgba(245,158,11,.18); touch-action:none; }
@@ -626,7 +627,7 @@ function errText(e) {
   if (/other_name_required/.test(m)) return 'กรุณาระบุชื่อเอกสาร';
   if (/chunk_missing/.test(m)) return 'ข้อมูลที่ส่งไม่ครบ กรุณากดลองใหม่';
   if (/pdf_too_large/.test(m)) return 'ไฟล์ใหญ่เกินไป ลดจำนวนหน้าหรือแบ่งเป็นหลายไฟล์';
-  if (/unauthorized/.test(m)) return 'ไม่มีสิทธิ์ใช้งาน (ลิงก์ไม่ถูกต้อง)';
+  if (/unauthorized/.test(m)) { const t = BOOT.token; return 'ไม่มีสิทธิ์ใช้งาน (ลิงก์ไม่ถูกต้อง) — token ในลิงก์: ' + (t ? t.slice(0, 2) + '…' + t.slice(-2) + ' (' + t.length + ' ตัว)' : 'ว่าง (ลิงก์ไม่มี t=)') + ' — ถ้าไม่ตรงกับที่ตั้ง ให้ปิดหน้านี้แล้วเปิดจากปุ่มใน AppSheet ใหม่'; }
   if (/Drive|Authorization|permission/i.test(m)) return 'ไม่มีสิทธิ์เข้าถึง Google Drive — แจ้งผู้ดูแลระบบให้รัน setup() และอนุญาตสิทธิ์';
   return 'บันทึกไม่สำเร็จ: ' + m;
 }
