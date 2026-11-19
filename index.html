@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scan Document</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  :root { --bg:#0b0d10; --card:#171a1f; --line:#2a2f37; --fg:#f2f4f7; --mute:#9aa3af; --ok:#22c55e; --brand:#f59e0b; --bad:#ef4444; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family:-apple-system,"Sarabun","Noto Sans Thai",system-ui,sans-serif; overflow:hidden; }
+  .hidden { display:none !important; }
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; }
+  button { font:inherit; color:inherit; border:0; border-radius:14px; padding:12px 16px; background:var(--card); cursor:pointer; }
+  button:active { transform:scale(.97); }
+  button.primary { background:var(--brand); color:#111; font-weight:700; }
+  button.ok { background:var(--ok); color:#07210f; font-weight:700; }
+  button.danger { background:#3b1417; color:#fca5a5; }
+  button:disabled { opacity:.4; }
+  h1 { font-size:20px; margin:0 0 4px; } p.sub { color:var(--mute); margin:0 0 16px; font-size:14px; }
+
+  /* เลือกประเภท */
+  #s-type { padding:max(20px,env(safe-area-inset-top)) 16px 16px; overflow:auto; }
+  .typebtn { display:block; width:100%; text-align:left; padding:18px; margin-bottom:10px; font-size:17px; border:2px solid var(--line); }
+  .typebtn.sel { border-color:var(--brand); background:#2a2110; }
+  #otherName { width:100%; padding:14px; font-size:17px; border-radius:12px; border:2px solid var(--line); background:var(--card); color:var(--fg); margin:4px 0 12px; }
+  #resume { background:#10261a; border:1px solid #1f6b3a; border-radius:14px; padding:12px; margin-bottom:14px; font-size:14px; }
+  #resume button { margin:8px 8px 0 0; padding:8px 12px; }
+
+  /* กล้อง */
+  #s-cam { background:#000; }
+  #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
+  #overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  #guide { position:absolute; border:3px solid rgba(255,255,255,.9); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); pointer-events:none; transition:border-color .2s; }
+  #guide.ready { border-color:var(--ok); }
+  #guide i { position:absolute; width:22px; height:22px; border:5px solid var(--brand); }
+  #guide i:nth-child(1){ left:-4px; top:-4px; border-right:0; border-bottom:0; border-radius:10px 0 0 0; }
+  #guide i:nth-child(2){ right:-4px; top:-4px; border-left:0; border-bottom:0; border-radius:0 10px 0 0; }
+  #guide i:nth-child(3){ left:-4px; bottom:-4px; border-right:0; border-top:0; border-radius:0 0 0 10px; }
+  #guide i:nth-child(4){ right:-4px; bottom:-4px; border-left:0; border-top:0; border-radius:0 0 10px 0; }
+  #top { position:absolute; top:0; left:0; right:0; padding:max(10px,env(safe-area-inset-top)) 12px 8px; display:flex; gap:8px; align-items:center; background:linear-gradient(#000a,#0000); }
+  #top .chip { background:#000a; padding:8px 12px; border-radius:20px; font-size:14px; max-width:46%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #top .sp { flex:1; }
+  #top button { padding:8px 12px; background:#000a; font-size:14px; }
+  #count { background:var(--brand); color:#111; font-weight:700; }
+  #hint { position:absolute; left:0; right:0; text-align:center; font-size:15px; text-shadow:0 1px 4px #000; padding:0 20px; }
+  #bottom { position:absolute; left:0; right:0; bottom:0; padding:8px 12px max(12px,env(safe-area-inset-bottom)); background:linear-gradient(#0000,#000c 30%); }
+  #strip { display:flex; gap:8px; overflow-x:auto; padding:6px 0 10px; min-height:70px; }
+  #strip .th { position:relative; flex:0 0 auto; width:48px; height:62px; border-radius:6px; background:#222 center/cover no-repeat; border:2px solid #fff4; }
+  #strip .th b { position:absolute; right:2px; bottom:2px; background:#000b; font-size:11px; padding:0 4px; border-radius:6px; }
+  #ctrl { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  #ctrl .side { flex:1; display:flex; }
+  #ctrl .side.r { justify-content:flex-end; }
+  #shutter { width:78px; height:78px; border-radius:50%; background:#fff; border:6px solid #fff6; background-clip:padding-box; padding:0; flex:0 0 auto; }
+  #shutter:active { background:var(--brand); }
+  #top, #bottom, #hint { z-index:3; }
+  #camMsg { z-index:2; position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px; gap:12px; background:#000a; }
+  #camMsg p { margin:0; color:var(--mute); }
+
+  /* Review sheet */
+  #review { position:fixed; inset:0; background:#000e; display:flex; flex-direction:column; z-index:10; padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
+  #rvTop { display:flex; align-items:center; gap:8px; padding-bottom:8px; }
+  #rvTop .sp { flex:1; text-align:center; font-weight:700; }
+  #rvImg { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  #rvImg img { max-width:100%; max-height:100%; object-fit:contain; background:#fff; border-radius:4px; }
+  #rvInfo { text-align:center; font-size:13px; color:var(--mute); padding:6px 0; }
+  .seg { display:flex; gap:6px; margin-bottom:8px; }
+  .seg button { flex:1; padding:10px 4px; font-size:14px; }
+  .seg button.on { background:var(--brand); color:#111; font-weight:700; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+
+  /* ปรับมุม */
+  #corner { position:fixed; inset:0; background:#000; z-index:20; display:flex; flex-direction:column; gap:10px; padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
+  #cnTitle { text-align:center; font-size:14px; color:var(--mute); }
+  #cnBox { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  #cnWrap { position:relative; display:inline-block; line-height:0; touch-action:none; }
+  #cnImg { display:block; max-width:calc(100vw - 24px); max-height:calc(100vh - 200px); }
+  #cnSvg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  #cnPoly { fill:rgba(245,158,11,.15); stroke:#f59e0b; stroke-width:3; vector-effect:non-scaling-stroke; }
+  .hd { position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%; border:3px solid #f59e0b; background:rgba(245,158,11,.18); touch-action:none; }
+
+  /* Finish */
+  #s-fin { padding:max(20px,env(safe-area-inset-top)) 16px 16px; overflow:auto; align-items:stretch; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; }
+  .card .k { color:var(--mute); font-size:13px; } .card .v { font-size:16px; word-break:break-all; margin-bottom:8px; }
+  .bar { height:8px; background:#222; border-radius:6px; overflow:hidden; margin:10px 0; }
+  .bar > div { height:100%; width:0; background:var(--brand); transition:width .2s; }
+  .err { color:#fca5a5; }
+  a.btn { display:block; text-align:center; text-decoration:none; background:var(--card); padding:12px; border-radius:14px; color:var(--fg); margin-bottom:8px; }
+</style>
+</head>
+<body>
+
+<!-- 1) เลือกประเภท -->
+<section id="s-type" class="screen">
+  <h1>สแกนเอกสาร</h1>
+  <p class="sub">เลือกประเภทเอกสารก่อนเริ่มสแกน</p>
+  <div id="resume" class="hidden"></div>
+  <div id="typeList"></div>
+  <input id="otherName" class="hidden" maxlength="60" placeholder="ชื่อเอกสาร เช่น สัญญาเช่า, สำเนาบัตรประชาชน">
+  <button id="btnStart" class="primary" style="padding:16px;font-size:18px" disabled>เริ่มสแกน</button>
+</section>
+
+<!-- 2) กล้อง -->
+<section id="s-cam" class="screen hidden">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="overlay"></canvas>
+  <div id="guide"><i></i><i></i><i></i><i></i></div>
+  <div id="top">
+    <button id="btnBack">‹</button>
+    <div class="chip" id="typeChip"></div>
+    <div class="sp"></div>
+    <button id="btnOrient" title="สลับแนวกรอบ">⟲ กรอบ</button>
+    <button id="btnTorch" class="hidden">🔦</button>
+    <div class="chip" id="count">0 หน้า</div>
+  </div>
+  <div id="hint"></div>
+  <div id="bottom">
+    <div id="strip"></div>
+    <div id="ctrl">
+      <div class="side"><button id="btnPick">🖼 เลือกรูป</button></div>
+      <button id="shutter" aria-label="ถ่ายภาพ"></button>
+      <div class="side r"><button id="btnFinish" class="ok" disabled>Finish ✓</button></div>
+    </div>
+  </div>
+  <div id="camMsg" class="hidden"></div>
+</section>
+
+<!-- Review -->
+<div id="review" class="hidden">
+  <div id="rvTop">
+    <button id="rvPrev">◀</button><div class="sp" id="rvTitle"></div><button id="rvNext">▶</button>
+  </div>
+  <div id="rvImg"><img id="rvPic" alt=""></div>
+  <div id="rvInfo"></div>
+  <div class="seg" id="rvMode">
+    <button data-m="color">สี (คมชัด)</button><button data-m="bw">ขาวดำ</button><button data-m="orig">ต้นฉบับ</button>
+  </div>
+  <div class="seg"><button id="rvCrop">ตัดขอบอัตโนมัติ: เปิด</button><button id="rvCorners">✥ ปรับมุมกระดาษ</button></div>
+  <button id="rvFinish" class="ok" style="width:100%;padding:14px;margin-bottom:8px;font-size:16px">Finish ✓ สร้าง PDF (<span id="rvN">0</span> หน้า)</button>
+  <div class="row">
+    <button id="rvRetake">↺ ถ่ายใหม่</button>
+    <button id="rvDelete" class="danger">🗑 ลบหน้า</button>
+    <button id="rvDone" class="primary">ถัดไป ›</button>
+  </div>
+</div>
+
+<!-- ปรับมุม -->
+<div id="corner" class="hidden">
+  <div id="cnTitle">ลากวงกลมสีส้มไปวางที่ “มุมกระดาษ” ทั้ง 4 มุม</div>
+  <div id="cnBox"><div id="cnWrap"><img id="cnImg" alt="">
+    <svg id="cnSvg" viewBox="0 0 1 1" preserveAspectRatio="none"><polygon id="cnPoly" points=""/></svg>
+    <div class="hd" data-i="0"></div><div class="hd" data-i="1"></div><div class="hd" data-i="2"></div><div class="hd" data-i="3"></div>
+  </div></div>
+  <div class="row"><button id="cnCancel">ยกเลิก</button><button id="cnReset">รีเซ็ต</button><button id="cnOk" class="primary">ใช้ค่านี้</button></div>
+</div>
+
+<!-- 3) Finish -->
+<section id="s-fin" class="screen hidden">
+  <h1 id="finTitle">สร้าง PDF</h1>
+  <div class="card">
+    <div class="k">ประเภทเอกสาร</div><div class="v" id="finType"></div>
+    <div class="k">จำนวนหน้า</div><div class="v" id="finPages"></div>
+    <div id="finResult"></div>
+  </div>
+  <div class="bar" id="finBar"><div></div></div>
+  <div id="finMsg" style="margin-bottom:12px"></div>
+  <div id="finBtns"></div>
+</section>
+
+<input id="fileCam" type="file" accept="image/*" capture="environment" class="hidden">
+<input id="filePick" type="file" accept="image/*" multiple class="hidden">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// ตั้งค่าครั้งเดียว: URL เว็บแอป Apps Script (/exec) ที่ Deploy แล้ว (ส่ง ?api=... ทับได้)
+const API_URL = 'https://script.google.com/macros/s/AKfycbz0VwhLbaXO4gUriQp2UH5goH-jM9q6My0UbConYa4XZFJuZrW1ciKBF9GdnHe5GEmRow/exec';
+const Q = new URLSearchParams(location.search);
+const TYPES = [
+  { id: 'cash_bill', label: 'บิลเงินสด' },
+  { id: 'tax_invoice', label: 'ใบกำกับภาษี / ใบเสร็จ' },
+  { id: 'receipt', label: 'ใบเสร็จ' },
+  { id: 'other', label: 'เอกสารอื่น ๆ' },
+];
+const normT = v => String(v || '').replace(/[\s.ๆ:：]/g, '').toLowerCase();
+function resolveTypeId(v) {
+  const n = normT(v); if (!n) return '';
+  if (n.indexOf('เอกสารอื่น') === 0 || n === 'other') return 'other';
+  const t = TYPES.find(t => t.id === v || normT(t.label) === n || (t.id === 'tax_invoice' && n === normT('ใบกำกับภาษี')));
+  return t ? t.id : '';
+}
+const rUrl = Q.get('returnUrl') || '';
+const BOOT = {
+  types: TYPES, typeId: resolveTypeId(Q.get('type')), other: (Q.get('other') || '').slice(0, 60),
+  user: Q.get('user') || '', rowId: (Q.get('id') || '').slice(0, 100), token: Q.get('t') || '',
+  app: Q.get('app') || '', sheet: Q.get('sheet') || '', tab: Q.get('tab') || '', sub: Q.get('sub') || '',
+  returnUrl: /^https:\/\/([a-z0-9-]+\.)*appsheet\.com\//i.test(rUrl) ? rUrl : '',
+  api: Q.get('api') || API_URL,
+};
+
+</script>
+<script>
+'use strict';
+/* ═════════ ค่าคงที่ ═════════ */
+const MAX_SIDE = 1800;          // ด้านยาวสุดของหน้า PDF (px)
+const JPEG_Q = 0.86;
+const CHUNK = 90000;            // ตัวอักษร base64 ต่อก้อน
+const CHUNKS_PER_CALL = 4;
+const A4 = 1 / 1.414;
+
+const $ = id => document.getElementById(id);
+const state = {
+  typeId: BOOT.typeId || '', other: BOOT.other || '',
+  sid: '', pages: [], stream: null, portrait: true, retakeId: null,
+  reviewIdx: -1, torch: false, busy: false, pdf: null, detTimer: 0,
+};
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10)).replace(/[^A-Za-z0-9_-]/g, '');
+const typeLabel = () => { const t = BOOT.types.find(t => t.id === state.typeId); return t ? (state.typeId === 'other' ? (state.other || t.label) : t.label) : ''; };
+const show = id => { ['s-type', 's-cam', 's-fin'].forEach(s => $(s).classList.toggle('hidden', s !== id)); };
+
+/* ═════════ IndexedDB: กันงานหายระหว่างสแกน ═════════ */
+const DB = (() => {
+  let db = null;
+  const open = () => new Promise(res => {
+    try {
+      const r = indexedDB.open('scanner-v1', 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('kv'); r.result.createObjectStore('pages', { keyPath: 'id' }); };
+      r.onsuccess = () => { db = r.result; res(db); };
+      r.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+  const tx = (store, mode, fn) => new Promise(res => {
+    if (!db) return res(null);
+    try {
+      const t = db.transaction(store, mode); const out = fn(t.objectStore(store));
+      t.oncomplete = () => res(out && out.result !== undefined ? out.result : true); t.onerror = t.onabort = () => res(null);
+    } catch (e) { res(null); }
+  });
+  return {
+    open,
+    putPage: p => tx('pages', 'readwrite', s => s.put({ id: p.id, orig: p.orig, quad: p.quad, guide: p.guide, crop: p.crop, mode: p.mode, proc: p.proc, w: p.w, h: p.h })),
+    delPage: id => tx('pages', 'readwrite', s => s.delete(id)),
+    getPage: id => tx('pages', 'readonly', s => s.get(id)),
+    setSession: () => tx('kv', 'readwrite', s => s.put({ sid: state.sid, typeId: state.typeId, other: state.other, ids: state.pages.map(p => p.id) }, 'session')),
+    getSession: () => tx('kv', 'readonly', s => s.get('session')),
+    clear: () => new Promise(res => { if (!db) return res(); try { const t = db.transaction(['kv', 'pages'], 'readwrite'); t.objectStore('kv').clear(); t.objectStore('pages').clear(); t.oncomplete = t.onerror = t.onabort = () => res(); } catch (e) { res(); } }),
+  };
+})();
+/* ═════════ Image helpers ═════════ */
+const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
+const toBlob = (c, q) => new Promise(r => c.toBlob(r, 'image/jpeg', q));
+function blobToCanvas(blob) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(blob), img = new Image();
+    img.onload = () => { const c = mkCanvas(img.naturalWidth, img.naturalHeight); c.getContext('2d').drawImage(img, 0, 0); URL.revokeObjectURL(url); res(c); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('image_load')); };
+    img.src = url;
+  });
+}
+function downscale(c, maxSide) {
+  const s = Math.min(1, maxSide / Math.max(c.width, c.height)); if (s >= 1) return c;
+  const o = mkCanvas(c.width * s, c.height * s); const x = o.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, o.width, o.height); return o;
+}
+
+/* ═════════ ตรวจจับขอบกระดาษ ═════════
+ * ขาวกว่าพื้นหลัง → Otsu → ก้อนใหญ่ที่สุดใกล้กลางภาพ → หา 4 มุมสุดโต่ง
+ * คืน {quad:[TL,TR,BR,BL] (0..1), area} หรือ null  */
+const det = { c: null };
+function detectQuad(src, sw, sh, maxSide) {
+  const s = Math.min(1, maxSide / Math.max(sw, sh)), w = Math.round(sw * s), h = Math.round(sh * s);
+  if (!det.c) det.c = document.createElement('canvas');
+  det.c.width = w; det.c.height = h;
+  const cx = det.c.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
+  const d = cx.getImageData(0, 0, w, h).data, n = w * h;
+  let g = new Uint8Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 4) g[i] = (d[j] * 77 + d[j + 1] * 150 + d[j + 2] * 29) >> 8;
+  g = boxBlur(g, w, h, 2);
+  // Otsu
+  const hist = new Float64Array(256); for (let i = 0; i < n; i++) hist[g[i]]++;
+  let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let wb = 0, sb = 0, best = 0, th = 127;
+  for (let t = 0; t < 256; t++) { wb += hist[t]; if (!wb) continue; const wf = n - wb; if (!wf) break; sb += t * hist[t]; const mb = sb / wb, mf = (sum - sb) / wf, v = wb * wf * (mb - mf) * (mb - mf); if (v > best) { best = v; th = t; } }
+  const lab = new Int32Array(n), stack = new Int32Array(n);
+  let bestC = null, bestScore = 0;
+  for (let i = 0; i < n; i++) {
+    if (g[i] <= th || lab[i]) continue;
+    let sp = 0, area = 0, sx = 0, sy = 0; stack[sp++] = i; lab[i] = 1;
+    let mnS = 1e9, mxS = -1e9, mnD = 1e9, mxD = -1e9, TL, BR, TR, BL;
+    while (sp) {
+      const p = stack[--sp], x = p % w, y = (p / w) | 0; area++; sx += x; sy += y;
+      const a = x + y, b = x - y;
+      if (a < mnS) { mnS = a; TL = [x, y]; } if (a > mxS) { mxS = a; BR = [x, y]; }
+      if (b > mxD) { mxD = b; TR = [x, y]; } if (b < mnD) { mnD = b; BL = [x, y]; }
+      if (x > 0 && g[p - 1] > th && !lab[p - 1]) { lab[p - 1] = 1; stack[sp++] = p - 1; }
+      if (x < w - 1 && g[p + 1] > th && !lab[p + 1]) { lab[p + 1] = 1; stack[sp++] = p + 1; }
+      if (y > 0 && g[p - w] > th && !lab[p - w]) { lab[p - w] = 1; stack[sp++] = p - w; }
+      if (y < h - 1 && g[p + w] > th && !lab[p + w]) { lab[p + w] = 1; stack[sp++] = p + w; }
+    }
+    if (area < n * 0.1) continue;
+    const dx = sx / area / w - .5, dy = sy / area / h - .5, score = area * (1 - Math.min(.8, Math.hypot(dx, dy)));
+    if (score > bestScore) { bestScore = score; bestC = { area, q: [TL, TR, BR, BL] }; }
+  }
+  if (!bestC || bestC.area > n * 0.97) return null;
+  const q = bestC.q, qa = polyArea(q);
+  if (qa < n * 0.12 || bestC.area / qa < 0.62) return null;           // ไม่ใช่สี่เหลี่ยม
+  if (!isConvex(q)) return null;
+  return { quad: q.map(p => ({ x: p[0] / w, y: p[1] / h })), area: qa / n };
+}
+function boxBlur(src, w, h, r) {
+  const tmp = new Uint8Array(src.length), out = new Uint8Array(src.length), k = 2 * r + 1;
+  for (let y = 0; y < h; y++) { let acc = 0; const o = y * w; for (let x = -r; x <= r; x++) acc += src[o + Math.min(w - 1, Math.max(0, x))];
+    for (let x = 0; x < w; x++) { tmp[o + x] = acc / k; acc += src[o + Math.min(w - 1, x + r + 1)] - src[o + Math.max(0, x - r)]; } }
+  for (let x = 0; x < w; x++) { let acc = 0; for (let y = -r; y <= r; y++) acc += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
+    for (let y = 0; y < h; y++) { out[y * w + x] = acc / k; acc += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x]; } }
+  return out;
+}
+function polyArea(q) { let a = 0; for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; a += p[0] * r[1] - r[0] * p[1]; } return Math.abs(a) / 2; }
+function isConvex(q) { let sg = 0; for (let i = 0; i < 4; i++) { const a = q[i], b = q[(i + 1) % 4], c = q[(i + 2) % 4], z = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); if (z === 0) return false; const s = z > 0 ? 1 : -1; if (sg && s !== sg) return false; sg = s; } return true; }
+
+/* ═════════ Perspective correction ═════════ */
+function solveH(dst, src) {           // dst(u,v) → src(x,y)
+  const A = [], B = [];
+  for (let i = 0; i < 4; i++) {
+    const [u, v] = dst[i], [x, y] = src[i];
+    A.push([u, v, 1, 0, 0, 0, -u * x, -v * x]); B.push(x);
+    A.push([0, 0, 0, u, v, 1, -u * y, -v * y]); B.push(y);
+  }
+  for (let i = 0; i < 8; i++) {       // Gauss
+    let m = i; for (let r = i + 1; r < 8; r++) if (Math.abs(A[r][i]) > Math.abs(A[m][i])) m = r;
+    [A[i], A[m]] = [A[m], A[i]]; [B[i], B[m]] = [B[m], B[i]];
+    for (let r = i + 1; r < 8; r++) { const f = A[r][i] / A[i][i]; for (let c = i; c < 8; c++) A[r][c] -= f * A[i][c]; B[r] -= f * B[i]; }
+  }
+  const X = new Array(8);
+  for (let i = 7; i >= 0; i--) { let s = B[i]; for (let c = i + 1; c < 8; c++) s -= A[i][c] * X[c]; X[i] = s / A[i][i]; }
+  return X;
+}
+function warpQuad(srcC, qn) {
+  const W0 = srcC.width, H0 = srcC.height;
+  let q = qn.map(p => [p.x * W0, p.y * H0]);
+  const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
+  q = q.map(p => [p[0] + (cx - p[0]) * 0.008, p[1] + (cy - p[1]) * 0.008]);       // หดเข้า 0.8% กันขอบดำ
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let ow = Math.max(dist(q[0], q[1]), dist(q[3], q[2])), oh = Math.max(dist(q[0], q[3]), dist(q[1], q[2]));
+  const s = Math.min(1, MAX_SIDE / Math.max(ow, oh)); ow = Math.max(16, Math.round(ow * s)); oh = Math.max(16, Math.round(oh * s));
+  const H = solveH([[0, 0], [ow, 0], [ow, oh], [0, oh]], q);
+  const sd = srcC.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W0, H0).data;
+  const out = mkCanvas(ow, oh), ox = out.getContext('2d'), od = ox.createImageData(ow, oh), o = od.data;
+  for (let v = 0; v < oh; v++) for (let u = 0; u < ow; u++) {
+    const d = H[6] * u + H[7] * v + 1, x = (H[0] * u + H[1] * v + H[2]) / d, y = (H[3] * u + H[4] * v + H[5]) / d;
+    const x0 = Math.floor(x), y0 = Math.floor(y), k = (v * ow + u) * 4;
+    if (x0 < 0 || y0 < 0 || x0 >= W0 - 1 || y0 >= H0 - 1) { o[k] = o[k + 1] = o[k + 2] = 255; o[k + 3] = 255; continue; }
+    const fx = x - x0, fy = y - y0, i00 = (y0 * W0 + x0) * 4, i10 = i00 + 4, i01 = i00 + W0 * 4, i11 = i01 + 4;
+    const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+    o[k] = sd[i00] * w00 + sd[i10] * w10 + sd[i01] * w01 + sd[i11] * w11;
+    o[k + 1] = sd[i00 + 1] * w00 + sd[i10 + 1] * w10 + sd[i01 + 1] * w01 + sd[i11 + 1] * w11;
+    o[k + 2] = sd[i00 + 2] * w00 + sd[i10 + 2] * w10 + sd[i01 + 2] * w01 + sd[i11 + 2] * w11;
+    o[k + 3] = 255;
+  }
+  ox.putImageData(od, 0, 0); return out;
+}
+function cropNorm(srcC, r) {           // r = {x,y,w,h} 0..1
+  const x = Math.max(0, r.x * srcC.width), y = Math.max(0, r.y * srcC.height);
+  const w = Math.min(srcC.width - x, r.w * srcC.width), h = Math.min(srcC.height - y, r.h * srcC.height);
+  const o = mkCanvas(w, h); o.getContext('2d').drawImage(srcC, x, y, w, h, 0, 0, o.width, o.height); return o;
+}
+
+/* ═════════ ปรับภาพให้อ่านง่าย (ลดเงา + เพิ่มความคมชัด) ═════════ */
+function enhance(c, mode) {
+  if (mode === 'orig') return c;
+  const w = c.width, h = c.height, cx = c.getContext('2d', { willReadFrequently: true });
+  const img = cx.getImageData(0, 0, w, h), d = img.data;
+  // 1) ประมาณสีพื้นกระดาษ (แสง/เงา) ต่อบล็อก แล้วหารออก
+  const bs = Math.max(8, Math.round(Math.max(w, h) / 70)), gw = Math.ceil(w / bs), gh = Math.ceil(h / bs);
+  let bg = new Float32Array(gw * gh);
+  for (let by = 0; by < gh; by++) for (let bx = 0; bx < gw; bx++) {
+    let s = 0, c1 = 0; const x1 = Math.min(w, (bx + 1) * bs), y1 = Math.min(h, (by + 1) * bs);
+    for (let y = by * bs; y < y1; y += 2) for (let x = bx * bs; x < x1; x += 2) { const k = (y * w + x) * 4; s += d[k] * .3 + d[k + 1] * .59 + d[k + 2] * .11; c1++; }
+    const m = s / c1; let s2 = 0, c2 = 0;
+    for (let y = by * bs; y < y1; y += 2) for (let x = bx * bs; x < x1; x += 2) { const k = (y * w + x) * 4, l = d[k] * .3 + d[k + 1] * .59 + d[k + 2] * .11; if (l >= m) { s2 += l; c2++; } }
+    bg[by * gw + bx] = c2 ? s2 / c2 : m;
+  }
+  const filt = (src, op) => { const o = new Float32Array(src.length); for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { let a = op === 'max' ? 0 : 0, n = 0; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const xx = x + i, yy = y + j; if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue; const v = src[yy * gw + xx]; if (op === 'max') a = Math.max(a, v); else { a += v; n++; } } o[y * gw + x] = op === 'max' ? a : a / n; } return o; };
+  bg = filt(filt(bg, 'max'), 'avg');
+  const lo = mode === 'bw' ? 75 : 45, hi = mode === 'bw' ? 205 : 232, sc = 255 / (hi - lo);
+  for (let y = 0; y < h; y++) {
+    const gy = Math.min(gh - 1, Math.max(0, (y + .5) / bs - .5)), y0 = Math.floor(gy), y1 = Math.min(gh - 1, y0 + 1), fy = gy - y0;
+    for (let x = 0; x < w; x++) {
+      const gx = Math.min(gw - 1, Math.max(0, (x + .5) / bs - .5)), x0 = Math.floor(gx), x1 = Math.min(gw - 1, x0 + 1), fx = gx - x0;
+      const B = Math.max(40, (bg[y0 * gw + x0] * (1 - fx) + bg[y0 * gw + x1] * fx) * (1 - fy) + (bg[y1 * gw + x0] * (1 - fx) + bg[y1 * gw + x1] * fx) * fy);
+      const f = 245 / B, k = (y * w + x) * 4;
+      if (mode === 'bw') {
+        let v = (d[k] * .3 + d[k + 1] * .59 + d[k + 2] * .11) * f; v = (v - lo) * sc; v = v < 0 ? 0 : v > 255 ? 255 : v; d[k] = d[k + 1] = d[k + 2] = v;
+      } else for (let ch = 0; ch < 3; ch++) { let v = (d[k + ch] * f - lo) * sc; d[k + ch] = v < 0 ? 0 : v > 255 ? 255 : v; }
+    }
+  }
+  // 2) Unsharp (3×3) เพิ่มความคมตัวอักษร
+  const src = new Uint8ClampedArray(d), amt = 0.6;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const k = (y * w + x) * 4;
+    for (let ch = 0; ch < 3; ch++) { const i = k + ch, bl = (src[i - 4] + src[i + 4] + src[i - w * 4] + src[i + w * 4]) / 4; d[i] = src[i] + (src[i] - bl) * amt; } }
+  cx.putImageData(img, 0, 0); return c;
+}
+
+/* ═════════ Pipeline ต่อหน้า ═════════ */
+async function processPage(p) {
+  let c = await blobToCanvas(p.orig);
+  if (p.crop && p.quad) c = warpQuad(c, p.quad);
+  else if (p.crop && p.guide) c = cropNorm(c, p.guide);
+  c = downscale(c, MAX_SIDE);
+  c = enhance(c, p.mode);
+  p.proc = await toBlob(c, JPEG_Q); p.w = c.width; p.h = c.height;
+  if (p.url) URL.revokeObjectURL(p.url); p.url = URL.createObjectURL(p.proc);
+  DB.putPage(p);
+}
+async function addPageFromCanvas(canvas, guide) {
+  const src = downscale(canvas, 2600);
+  const r = detectQuad(src, src.width, src.height, 480);
+  const p = {
+    id: uid(), crop: true, mode: 'color', guide: guide || null,
+    quad: r && r.area > 0.2 ? r.quad : null, orig: await toBlob(src, 0.92), url: '',
+  };
+  p.kind = p.quad ? 'quad' : (p.guide ? 'guide' : 'none');
+  await processPage(p);
+  if (state.retakeId) {
+    const i = state.pages.findIndex(x => x.id === state.retakeId);
+    if (i >= 0) { DB.delPage(state.pages[i].id); URL.revokeObjectURL(state.pages[i].url); state.pages[i] = p; } else state.pages.push(p);
+    state.retakeId = null;
+  } else state.pages.push(p);
+  DB.setSession(); renderStrip();
+  return state.pages.indexOf(p);
+}
+
+/* ═════════ UI: เลือกประเภท ═════════ */
+function renderTypes() {
+  $('typeList').innerHTML = '';
+  BOOT.types.forEach(t => {
+    const b = document.createElement('button'); b.className = 'typebtn' + (t.id === state.typeId ? ' sel' : ''); b.textContent = t.label;
+    b.onclick = () => { state.typeId = t.id; renderTypes(); };
+    $('typeList').appendChild(b);
+  });
+  const isOther = state.typeId === 'other';
+  $('otherName').classList.toggle('hidden', !isOther);
+  $('btnStart').disabled = !state.typeId || (isOther && !state.other.trim());
+}
+$('otherName').value = state.other;
+$('otherName').oninput = e => { state.other = e.target.value; $('btnStart').disabled = !state.other.trim(); };
+$('btnStart').onclick = () => { if (!state.sid) state.sid = uid(); DB.setSession(); enterCamera(); };
+
+/* ═════════ UI: กล้อง ═════════ */
+let vidW = 0, vidH = 0, guideRect = null;
+async function enterCamera() {
+  show('s-cam'); $('typeChip').textContent = typeLabel(); renderStrip(); layoutGuide();
+  await startStream();
+}
+$('btnBack').onclick = () => { stopStream(); show('s-type'); renderTypes(); };
+
+async function startStream() {
+  stopStream(); $('camMsg').classList.add('hidden');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return noCamera('เบราว์เซอร์นี้ไม่รองรับกล้องแบบสด');
+  try {
+    state.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+  } catch (e) {
+    const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+    return noCamera(denied ? 'ไม่ได้รับอนุญาตให้ใช้กล้อง\nเปิดสิทธิ์กล้องที่ไอคอน 🔒 ข้างช่องที่อยู่เว็บ หรือในตั้งค่าเบราว์เซอร์ แล้วกด “ลองอีกครั้ง”' : 'เปิดกล้องไม่สำเร็จ (' + (e && e.name) + ')', true);
+  }
+  const v = $('video'); v.srcObject = state.stream; await v.play().catch(() => {});
+  const track = state.stream.getVideoTracks()[0], caps = track.getCapabilities ? track.getCapabilities() : {};
+  $('btnTorch').classList.toggle('hidden', !caps.torch);
+  try { if (caps.focusMode && caps.focusMode.includes('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (e) {}
+  v.onloadedmetadata = () => { vidW = v.videoWidth; vidH = v.videoHeight; layoutGuide(); };
+  vidW = v.videoWidth; vidH = v.videoHeight; layoutGuide(); startDetect();
+}
+function stopStream() { clearInterval(state.detTimer); if (state.stream) state.stream.getTracks().forEach(t => t.stop()); state.stream = null; state.torch = false; }
+function noCamera(msg, canRetry) {
+  const m = $('camMsg'); m.classList.remove('hidden');
+  m.innerHTML = '<div style="font-size:40px">📷</div><p style="white-space:pre-line;color:#fff"></p><p>ยังสแกนได้ด้วยกล้องของเครื่อง</p>';
+  m.querySelector('p').textContent = msg;
+  const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'ถ่ายด้วยกล้องเครื่อง'; b1.onclick = () => $('fileCam').click(); m.appendChild(b1);
+  if (canRetry) { const b2 = document.createElement('button'); b2.textContent = 'ลองอีกครั้ง'; b2.onclick = startStream; m.appendChild(b2); }
+}
+$('btnTorch').onclick = async () => {
+  const t = state.stream && state.stream.getVideoTracks()[0]; if (!t) return;
+  state.torch = !state.torch; try { await t.applyConstraints({ advanced: [{ torch: state.torch }] }); } catch (e) { state.torch = false; }
+  $('btnTorch').style.background = state.torch ? 'var(--brand)' : '';
+};
+$('btnOrient').onclick = () => { state.portrait = !state.portrait; layoutGuide(); };
+
+/* กรอบ Guide: วางกลางพื้นที่ระหว่างแถบบนและล่าง */
+function layoutGuide() {
+  const cw = innerWidth, ch = innerHeight, topH = 64, botH = 190;
+  const aw = cw * 0.92, ah = ch - topH - botH, a = state.portrait ? A4 : 1 / A4;
+  let w = aw, h = w / a; if (h > ah) { h = ah; w = h * a; }
+  const l = (cw - w) / 2, t = topH + (ah - h) / 2; guideRect = { l, t, w, h };
+  const g = $('guide'); g.style.cssText = `left:${l}px;top:${t}px;width:${w}px;height:${h}px`;
+  $('hint').style.top = (t + h + 8) + 'px';
+  const o = $('overlay'); o.width = cw; o.height = ch;
+}
+addEventListener('resize', layoutGuide);
+function vmap() {                    // object-fit:cover mapping
+  const cw = innerWidth, ch = innerHeight, s = Math.max(cw / vidW, ch / vidH);
+  return { s, ox: (cw - vidW * s) / 2, oy: (ch - vidH * s) / 2 };
+}
+function guideNorm() {
+  if (!vidW || !guideRect) return null; const m = vmap();
+  const x = (guideRect.l - m.ox) / m.s, y = (guideRect.t - m.oy) / m.s, w = guideRect.w / m.s, h = guideRect.h / m.s;
+  const X = Math.max(0, x / vidW), Y = Math.max(0, y / vidH);
+  return { x: X, y: Y, w: Math.min(1 - X, w / vidW), h: Math.min(1 - Y, h / vidH) };
+}
+
+/* ตรวจขอบสดบนวิดีโอ → วาดกรอบเขียว + คำแนะนำ */
+function startDetect() {
+  clearInterval(state.detTimer);
+  state.detTimer = setInterval(() => {
+    const v = $('video'); if (!vidW || v.readyState < 2 || !$('review').classList.contains('hidden')) return;
+    const o = $('overlay'), x = o.getContext('2d'); x.clearRect(0, 0, o.width, o.height);
+    let r = null; try { r = detectQuad(v, vidW, vidH, 140); } catch (e) {}
+    const g = $('guide'); let msg = 'วางเอกสารให้เต็มกรอบ ขอบตรงกับเส้น';
+    if (r) {
+      const m = vmap(); x.lineWidth = 4; x.strokeStyle = '#22c55e'; x.fillStyle = 'rgba(34,197,94,.15)'; x.beginPath();
+      r.quad.forEach((p, i) => { const px = p.x * vidW * m.s + m.ox, py = p.y * vidH * m.s + m.oy; i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.closePath(); x.fill(); x.stroke();
+      if (r.area < 0.3) msg = 'ขยับกล้องเข้าใกล้อีกนิด'; else if (r.area > 0.9) msg = 'ถอยกล้องออกเล็กน้อย เห็นขอบกระดาษไม่ครบ'; else msg = 'พร้อมถ่าย ✓ ถือให้นิ่ง';
+      g.classList.toggle('ready', r.area >= 0.3 && r.area <= 0.9);
+    } else g.classList.remove('ready');
+    $('hint').textContent = state.retakeId ? 'กำลังถ่ายหน้า ' + (state.pages.findIndex(p => p.id === state.retakeId) + 1) + ' ใหม่ — ' + msg : msg;
+  }, 350);
+}
+
+/* ถ่ายภาพ */
+$('shutter').onclick = async () => {
+  if (state.busy) return; const v = $('video');
+  if (!state.stream || !vidW || v.readyState < 2) return $('fileCam').click();
+  state.busy = true;
+  try {
+    const c = mkCanvas(vidW, vidH); c.getContext('2d').drawImage(v, 0, 0, vidW, vidH);
+    if (navigator.vibrate) navigator.vibrate(30);
+    const idx = await addPageFromCanvas(c, guideNorm()); openReview(idx);
+  } catch (e) { toast('ถ่ายภาพไม่สำเร็จ ลองอีกครั้ง'); } finally { state.busy = false; }
+};
+async function fromFiles(files, guide) {
+  state.busy = true; let last = -1;
+  try { for (const f of files) { const c = await blobToCanvas(f); last = await addPageFromCanvas(c, guide); } if (last >= 0) openReview(last); }
+  catch (e) { toast('อ่านรูปไม่สำเร็จ'); } finally { state.busy = false; }
+}
+$('fileCam').onchange = e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) fromFiles(f, null); };
+$('btnPick').onclick = () => $('filePick').click();
+$('filePick').onchange = e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) fromFiles(f, null); };
+
+function renderStrip() {
+  const s = $('strip'); s.innerHTML = '';
+  state.pages.forEach((p, i) => { const d = document.createElement('div'); d.className = 'th'; d.style.backgroundImage = `url(${p.url})`; d.innerHTML = '<b>' + (i + 1) + '</b>'; d.onclick = () => openReview(i); s.appendChild(d); });
+  s.scrollLeft = s.scrollWidth;
+  $('count').textContent = state.pages.length + ' หน้า'; $('btnFinish').disabled = !state.pages.length;
+}
+function toast(t) { const d = document.createElement('div'); d.textContent = t; d.style.cssText = 'position:fixed;left:50%;top:80px;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 16px;border-radius:20px;z-index:99;font-size:14px'; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
+
+/* ═════════ Review ═════════ */
+function openReview(i) {
+  if (i < 0 || i >= state.pages.length) return closeReview();
+  state.reviewIdx = i; const p = state.pages[i];
+  $('review').classList.remove('hidden');
+  $('rvN').textContent = state.pages.length; $('rvTitle').textContent = 'หน้า ' + (i + 1) + ' / ' + state.pages.length;
+  $('rvPic').src = p.url;
+  $('rvInfo').textContent = p.kind === 'manual' ? 'ปรับมุมกระดาษเองแล้ว' : p.kind === 'quad' ? 'ตรวจพบขอบกระดาษ — ถ้าไม่ตรง กด “ปรับมุมกระดาษ”' : p.kind === 'guide' ? 'ไม่พบขอบชัด — ตัดตามกรอบที่แนะนำ' : 'ใช้ภาพเต็ม';
+  $('rvCrop').textContent = 'ตัดขอบอัตโนมัติ: ' + (p.crop ? 'เปิด' : 'ปิด');
+  document.querySelectorAll('#rvMode button').forEach(b => b.classList.toggle('on', b.dataset.m === p.mode));
+  $('rvPrev').disabled = i === 0; $('rvNext').disabled = i === state.pages.length - 1;
+  $('rvDone').textContent = i === state.pages.length - 1 ? 'ถ่ายหน้าต่อไป ›' : 'ถัดไป ›';
+}
+$('rvFinish').onclick = () => $('btnFinish').onclick();
+function closeReview() { $('review').classList.add('hidden'); state.reviewIdx = -1; }
+$('rvPrev').onclick = () => openReview(state.reviewIdx - 1);
+$('rvNext').onclick = () => openReview(state.reviewIdx + 1);
+$('rvDone').onclick = () => { if (state.reviewIdx < state.pages.length - 1) openReview(state.reviewIdx + 1); else closeReview(); };
+$('rvRetake').onclick = () => { state.retakeId = state.pages[state.reviewIdx].id; closeReview(); if (!state.stream) $('fileCam').click(); };
+$('rvDelete').onclick = () => {
+  const p = state.pages[state.reviewIdx]; DB.delPage(p.id); URL.revokeObjectURL(p.url); state.pages.splice(state.reviewIdx, 1); DB.setSession(); renderStrip();
+  if (!state.pages.length) closeReview(); else openReview(Math.min(state.reviewIdx, state.pages.length - 1));
+};
+async function reprocess() { const p = state.pages[state.reviewIdx]; $('rvPic').style.opacity = .4; await processPage(p); $('rvPic').style.opacity = 1; renderStrip(); openReview(state.reviewIdx); }
+document.querySelectorAll('#rvMode button').forEach(b => b.onclick = () => { state.pages[state.reviewIdx].mode = b.dataset.m; reprocess(); });
+$('rvCrop').onclick = () => { const p = state.pages[state.reviewIdx]; p.crop = !p.crop; reprocess(); };
+
+/* ═════════ ปรับมุมกระดาษเอง ═════════ */
+const cn = { pts: null, def: null, url: '' };
+const clamp01 = v => Math.max(0, Math.min(1, v));
+function openCorners() {
+  const p = state.pages[state.reviewIdx], g = p.guide;
+  cn.def = g ? [{ x: g.x, y: g.y }, { x: g.x + g.w, y: g.y }, { x: g.x + g.w, y: g.y + g.h }, { x: g.x, y: g.y + g.h }]
+             : [{ x: .08, y: .08 }, { x: .92, y: .08 }, { x: .92, y: .92 }, { x: .08, y: .92 }];
+  cn.pts = (p.quad || cn.def).map(q => ({ x: q.x, y: q.y }));
+  cn.url = URL.createObjectURL(p.orig); $('cnImg').src = cn.url;
+  $('corner').classList.remove('hidden'); drawCorners();
+}
+function drawCorners() {
+  $('cnPoly').setAttribute('points', cn.pts.map(q => q.x + ',' + q.y).join(' '));
+  document.querySelectorAll('.hd').forEach(h => { const q = cn.pts[+h.dataset.i]; h.style.left = q.x * 100 + '%'; h.style.top = q.y * 100 + '%'; });
+}
+function closeCorners() { $('corner').classList.add('hidden'); if (cn.url) URL.revokeObjectURL(cn.url); cn.url = ''; }
+document.querySelectorAll('.hd').forEach(h => {
+  h.onpointerdown = e => { h.setPointerCapture(e.pointerId); h._d = 1; e.preventDefault(); };
+  h.onpointermove = e => { if (!h._d) return; const r = $('cnWrap').getBoundingClientRect(); cn.pts[+h.dataset.i] = { x: clamp01((e.clientX - r.left) / r.width), y: clamp01((e.clientY - r.top) / r.height) }; drawCorners(); };
+  h.onpointerup = h.onpointercancel = () => { h._d = 0; };
+});
+$('rvCorners').onclick = openCorners;
+$('cnCancel').onclick = closeCorners;
+$('cnReset').onclick = () => { cn.pts = cn.def.map(q => ({ x: q.x, y: q.y })); drawCorners(); };
+$('cnOk').onclick = async () => {
+  const p = state.pages[state.reviewIdx]; p.quad = cn.pts.map(q => ({ x: q.x, y: q.y })); p.crop = true; p.kind = 'manual';
+  closeCorners(); await reprocess();
+};
+
+/* ═════════ Finish: สร้าง PDF + อัปโหลด ═════════ */
+$('btnFinish').onclick = () => { stopStream(); closeReview(); show('s-fin'); $('finType').textContent = typeLabel(); $('finPages').textContent = state.pages.length + ' หน้า'; state.pdf = null; runFinish(); };
+const setBar = f => $('finBar').firstElementChild.style.width = Math.round(f * 100) + '%';
+const msg = (t, bad) => { $('finMsg').className = bad ? 'err' : ''; $('finMsg').textContent = t; };
+const gs = async (name, ...args) => {
+  const body = name === 'uploadChunks' ? { action: name, token: args[0], key: args[1], start: args[2], chunks: args[3] } : { action: name, meta: args[0] };
+  const r = await fetch(BOOT.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'server_error');
+  return j.data;
+};
+const blobToB64 = b => new Promise((ok, ng) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = ng; r.readAsDataURL(b); });
+function errText(e) {
+  const m = String((e && e.message) || e);
+  if (/other_name_required/.test(m)) return 'กรุณาระบุชื่อเอกสาร';
+  if (/chunk_missing/.test(m)) return 'ข้อมูลที่ส่งไม่ครบ กรุณากดลองใหม่';
+  if (/pdf_too_large/.test(m)) return 'ไฟล์ใหญ่เกินไป ลดจำนวนหน้าหรือแบ่งเป็นหลายไฟล์';
+  if (/unauthorized/.test(m)) return 'ไม่มีสิทธิ์ใช้งาน (ลิงก์ไม่ถูกต้อง)';
+  if (/Drive|Authorization|permission/i.test(m)) return 'ไม่มีสิทธิ์เข้าถึง Google Drive — แจ้งผู้ดูแลระบบให้รัน setup() และอนุญาตสิทธิ์';
+  return 'บันทึกไม่สำเร็จ: ' + m;
+}
+
+async function buildPdf() {
+  if (!(window.jspdf && window.jspdf.jsPDF)) throw new Error('โหลดไลบรารี PDF ไม่สำเร็จ (ตรวจอินเทอร์เน็ต)');
+  const { jsPDF } = window.jspdf; let doc = null;
+  for (let i = 0; i < state.pages.length; i++) {
+    const p = state.pages[i], u8 = new Uint8Array(await p.proc.arrayBuffer());
+    const pw = p.w >= p.h ? 842 : 595, ph = pw * p.h / p.w, o = p.w >= p.h ? 'l' : 'p';
+    if (!doc) doc = new jsPDF({ unit: 'pt', format: [pw, ph], orientation: o, compress: true }); else doc.addPage([pw, ph], o);
+    doc.addImage(u8, 'JPEG', 0, 0, pw, ph, undefined, 'FAST');
+    setBar(0.1 * (i + 1) / state.pages.length * 4);   // 0 → 40%
+  }
+  return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
+}
+
+async function runFinish() {
+  $('finBtns').innerHTML = ''; $('finResult').innerHTML = ''; $('finTitle').textContent = 'กำลังสร้าง PDF…'; setBar(0.02);
+  try {
+    if (!state.pdf) { msg('รวมภาพเป็น PDF…'); state.pdf = await buildPdf(); }
+    if (!navigator.onLine) throw new Error('offline');
+    const b64 = await blobToB64(state.pdf), key = state.sid + '-' + state.pdf.size + '-' + state.pages.length;
+    const chunks = []; for (let i = 0; i < b64.length; i += CHUNK) chunks.push(b64.slice(i, i + CHUNK));
+    msg('กำลังอัปโหลด… (PDF ' + (state.pdf.size / 1048576).toFixed(1) + ' MB)');
+    for (let i = 0; i < chunks.length; i += CHUNKS_PER_CALL) {
+      await gs('uploadChunks', BOOT.token, key, i, chunks.slice(i, i + CHUNKS_PER_CALL));
+      setBar(0.4 + 0.5 * Math.min(1, (i + CHUNKS_PER_CALL) / chunks.length));
+    }
+    msg('กำลังบันทึกลง Google Drive…');
+    const r = await gs('finalizePdf', { token: BOOT.token, key, totalChunks: chunks.length, typeId: state.typeId, other: state.other, pages: state.pages.length, user: BOOT.user, rowId: BOOT.rowId, app: BOOT.app, sheet: BOOT.sheet, tab: BOOT.tab, sub: BOOT.sub });
+    setBar(1); onSuccess(r);
+  } catch (e) {
+    const off = !navigator.onLine || /offline|NetworkError|Failed to fetch/i.test(String(e && e.message));
+    $('finTitle').textContent = 'บันทึกไม่สำเร็จ'; msg(off ? 'อินเทอร์เน็ตขัดข้อง — ภาพทั้งหมดยังอยู่ในเครื่อง ไม่หาย กดลองใหม่เมื่อสัญญาณกลับมา' : errText(e), true);
+    const b = document.createElement('button'); b.className = 'primary'; b.style.cssText = 'width:100%;margin-bottom:8px'; b.textContent = 'ลองบันทึกอีกครั้ง'; b.onclick = runFinish; $('finBtns').appendChild(b);
+    if (state.pdf) { const d = document.createElement('a'); d.className = 'btn'; d.textContent = 'ดาวน์โหลด PDF เก็บไว้ในเครื่อง'; d.href = URL.createObjectURL(state.pdf); d.download = 'scan.pdf'; d.target = '_blank'; $('finBtns').appendChild(d); }
+    const bk = document.createElement('button'); bk.style.width = '100%'; bk.textContent = '‹ กลับไปแก้ไข/ถ่ายเพิ่ม'; bk.onclick = () => { state.pdf = null; enterCamera(); }; $('finBtns').appendChild(bk);
+  }
+}
+
+function onSuccess(r) {
+  $('finTitle').textContent = '✓ บันทึกเรียบร้อย';
+  msg(r.duplicate ? 'ไฟล์นี้ถูกบันทึกไว้แล้ว (ไม่สร้างซ้ำ)' : 'ส่งข้อมูลกลับ AppSheet แล้ว');
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('finResult').innerHTML = '<div class="k">ชื่อไฟล์</div><div class="v">' + esc(r.fileName) + '</div><div class="k">วันที่สแกน</div><div class="v">' + esc(r.scannedAt) + '</div>';
+  $('finPages').textContent = r.pages + ' หน้า';
+  const bx = $('finBtns'); bx.innerHTML = '';
+  const a = document.createElement('a'); a.className = 'btn'; a.href = r.url; a.target = '_blank'; a.textContent = 'เปิดไฟล์ PDF ใน Google Drive'; bx.appendChild(a);
+  const n = document.createElement('button'); n.className = 'primary'; n.style.cssText = 'width:100%;margin-bottom:8px'; n.textContent = 'สแกนชุดใหม่'; n.onclick = newBatch; bx.appendChild(n);
+  if (BOOT.returnUrl) {
+    const r2 = document.createElement('button'); r2.className = 'ok'; r2.style.cssText = 'width:100%;margin-bottom:8px;padding:14px';
+    let left = 4; const go = () => { location.href = BOOT.returnUrl; };
+    const tick = () => { r2.textContent = 'กลับไป AppSheet (' + left + ')'; if (left-- <= 0) go(); else r._t = setTimeout(tick, 1000); };
+    r2.onclick = () => { clearTimeout(r._t); go(); }; bx.insertBefore(r2, bx.firstChild); tick();
+  }
+  state.pages.forEach(p => URL.revokeObjectURL(p.url)); state.pages = []; state.pdf = null; DB.clear();
+}
+function newBatch() { state.sid = uid(); state.other = BOOT.other || ''; if (!BOOT.typeId) state.typeId = ''; DB.setSession(); show('s-type'); renderTypes(); $('resume').classList.add('hidden'); }
+
+/* ═════════ เริ่มต้น + กู้งานค้าง ═════════ */
+(async function init() {
+  window.addEventListener('beforeunload', e => { if (state.pages.length) { e.preventDefault(); e.returnValue = ''; } });
+  await DB.open();
+  const sess = await DB.getSession();
+  if (sess && sess.ids && sess.ids.length) {
+    const box = $('resume'); box.classList.remove('hidden');
+    box.innerHTML = 'พบงานสแกนที่ยังไม่บันทึก <b>' + sess.ids.length + ' หน้า</b> (เช่น จากเน็ตหลุด/ปิดหน้าจอ)<br>';
+    const y = document.createElement('button'); y.className = 'ok'; y.textContent = 'ทำต่อ';
+    const n = document.createElement('button'); n.className = 'danger'; n.textContent = 'ทิ้ง';
+    y.onclick = async () => {
+      state.sid = sess.sid; state.typeId = sess.typeId; state.other = sess.other || '';
+      for (const id of sess.ids) { const r = await DB.getPage(id); if (r && r.proc) { r.url = URL.createObjectURL(r.proc); r.kind = r.quad ? 'quad' : r.guide ? 'guide' : 'none'; state.pages.push(r); } }
+      $('otherName').value = state.other; box.classList.add('hidden'); renderTypes();
+      if (state.pages.length) enterCamera();
+    };
+    n.onclick = async () => { await DB.clear(); box.classList.add('hidden'); };
+    box.appendChild(y); box.appendChild(n);
+  }
+  if (!state.sid) state.sid = uid();
+  renderTypes();
+  // ถ้า AppSheet ส่งประเภทมาครบแล้ว → ข้ามขั้นเลือก ไปกล้องทันที
+  const ready = state.typeId && (state.typeId !== 'other' || state.other.trim());
+  if (ready && !(sess && sess.ids && sess.ids.length)) $('btnStart').click();
+})();
+</script>
+</body>
+</html>
